@@ -229,6 +229,14 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
     }));
   }, []);
 
+  // Keep async loaders scoped to the currently selected incident, including
+  // incidents created directly by the New Analysis flow.
+  useEffect(() => {
+    if (incident?.id) {
+      activeIncidentIdRef.current = incident.id;
+    }
+  }, [incident?.id]);
+
   // Synchronize custom markings whenever incident changes
   useEffect(() => {
     if (incident?.id) {
