@@ -68,6 +68,14 @@ class ApiService {
       headers,
     });
 
+    if (response.status === 401) {
+      const hadToken = this.token !== null;
+      this.setToken(null);
+      if (hadToken) {
+        window.dispatchEvent(new Event('aeromesh:auth-expired'));
+      }
+    }
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: response.statusText }));
       throw new Error(errorData.detail || `Request failed with status ${response.status}`);

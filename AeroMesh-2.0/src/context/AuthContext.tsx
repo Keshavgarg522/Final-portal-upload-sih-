@@ -46,6 +46,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null);
+      setToken(null);
+      setShowLoginModal(true);
+    };
+
+    window.addEventListener('aeromesh:auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('aeromesh:auth-expired', handleAuthExpired);
+  }, []);
+
   const openLoginModal = useCallback(() => setShowLoginModal(true), []);
   const closeLoginModal = useCallback(() => setShowLoginModal(false), []);
 

@@ -59,8 +59,12 @@ function AppContent() {
           } />
           <Route path="/report" element={<AnalysisReportPage />} />
           <Route path="/report/:id" element={<AnalysisReportPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/analysis/:id" element={<DashboardPage />} />
+          <Route path="/dashboard" element={
+            <RequireAuth><DashboardPage /></RequireAuth>
+          } />
+          <Route path="/analysis/:id" element={
+            <RequireAuth><DashboardPage /></RequireAuth>
+          } />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
