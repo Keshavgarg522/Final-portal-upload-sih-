@@ -1,7 +1,7 @@
 import type { Incident, CustomMarking, VideoFrame, IncidentStats, ReconstructionAnnotation, ReconstructionData } from '../types';
 
-const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '');
-const RAW_STORAGE_BASE_URL = (import.meta.env.VITE_STORAGE_BASE_URL || RAW_API_BASE_URL.replace(/\/api$/, '') || 'http://localhost:8000').replace(/\/$/, '');
+const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://aeromesh-backend-cgw4.onrender.com/api').replace(/\/$/, '');
+const RAW_STORAGE_BASE_URL = (import.meta.env.VITE_STORAGE_BASE_URL || RAW_API_BASE_URL.replace(/\/api$/, '')).replace(/\/$/, '');
 const API_BASE_URL = RAW_API_BASE_URL;
 const STORAGE_BASE_URL = RAW_STORAGE_BASE_URL;
 
