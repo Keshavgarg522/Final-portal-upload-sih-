@@ -176,7 +176,7 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
    * Completely isolates each analysis: markings from one analysis never leak to another.
    * When reopening an existing analysis, its saved custom markings and individual visibility states are restored.
    */
-  const loadMarkingsForIncident = useCallback(async (incidentId: string) => {
+  const loadMarkingsForIncident = useCallback(async (incidentId: string): Promise<boolean> => {
     // Immediately clear current markings so previous analysis markings NEVER leak!
     setMarkings([]);
     setCustomMarkingsMaster(true);
@@ -184,14 +184,17 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
 
     let loaded: CustomMarking[] = [];
 
+    let backendLoaded = false;
+
     // 1. Fetch from backend database
     try {
       const backendMarks = await api.getMarkings(incidentId);
+      backendLoaded = true;
       if (backendMarks && backendMarks.length > 0) {
         loaded = backendMarks.map(m => ({ ...m, isSystem: m.isSystem ?? false }));
       }
-    } catch {
-      // offline or not found
+    } catch (error) {
+      console.warn('[AeroMesh API] Failed to load incident markings:', error);
     }
 
     // 2. Check per-incident localStorage cache if backend returned none
@@ -215,7 +218,7 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
     }
 
     // Ensure we do not set markings if the user switched away while loading
-    if (activeIncidentIdRef.current !== incidentId) return;
+    if (activeIncidentIdRef.current !== incidentId) return false;
 
     // 4. Set loaded markings and restore their individual visibility states
     setMarkings(loaded);
@@ -227,6 +230,7 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
       ...prev,
       customMarkings: customFilterMap,
     }));
+    return backendLoaded;
   }, []);
 
   // Keep async loaders scoped to the currently selected incident, including
@@ -253,7 +257,7 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
    * They appear as default marking overlays controlled by the platform layer toggles.
    * Clears previous analysis markings so they never leak between incidents.
    */
-  const loadPlatformMarkingsForIncident = useCallback(async (incidentId: string) => {
+  const loadPlatformMarkingsForIncident = useCallback(async (incidentId: string): Promise<boolean> => {
     if (incidentId === initialIncident.id) {
       setPlatformMarkings(DEFAULT_PLATFORM_MARKINGS);
     } else {
@@ -262,7 +266,7 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
 
     try {
       const annotations: ReconstructionAnnotation[] = await api.getAnnotations(incidentId);
-      if (activeIncidentIdRef.current !== incidentId) return;
+      if (activeIncidentIdRef.current !== incidentId) return false;
       if (annotations && annotations.length > 0) {
         const converted: CustomMarking[] = annotations.map(ann => {
           let cat: CustomMarking['category'];
@@ -304,8 +308,9 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
         });
         setPlatformMarkings(converted);
       }
-    } catch {
-      // Backend offline or no annotations yet
+      return true;
+    } catch (error) {
+      console.warn('[AeroMesh API] Failed to load incident annotations:', error);
       if (activeIncidentIdRef.current === incidentId) {
         if (incidentId === initialIncident.id) {
           setPlatformMarkings(DEFAULT_PLATFORM_MARKINGS);
@@ -313,6 +318,7 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
           setPlatformMarkings([]);
         }
       }
+      return false;
     }
   }, []);
 
@@ -358,6 +364,17 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
     try {
       const fresh = await api.getIncident(id);
       if (fresh) {
+        // ── Reload AI-detected markings and platform annotations ───────────
+        // This is critical: ensures that newly-generated default markings from
+        // the pipeline (is_system=true in custom_markings table) appear on the
+        // 3D model immediately after analysis completes without requiring a
+        // full page reload.
+        const [markingsLoaded, annotationsLoaded] = await Promise.all([
+          loadMarkingsForIncident(id),
+          loadPlatformMarkingsForIncident(id),
+        ]);
+        if (!markingsLoaded || !annotationsLoaded) return null;
+
         setIncident(fresh);
         setHistoryList(prev => {
           const idx = prev.findIndex(item => item.id === id);
@@ -369,13 +386,6 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
           return [fresh, ...prev];
         });
         if (fresh.stats) setStats(fresh.stats);
-        // ── Reload AI-detected markings and platform annotations ───────────
-        // This is critical: ensures that newly-generated default markings from
-        // the pipeline (is_system=true in custom_markings table) appear on the
-        // 3D model immediately after analysis completes without requiring a
-        // full page reload.
-        await loadMarkingsForIncident(id);
-        await loadPlatformMarkingsForIncident(id);
         return fresh;
       }
     } catch (err) {

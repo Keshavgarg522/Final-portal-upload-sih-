@@ -40,49 +40,51 @@ export const DashboardPage: React.FC = () => {
   } = useIncident();
 
   // ── Analysis Status Polling ────────────────────────────────────────────────
-  // When an analysis is running in the background, poll every 3s.
-  // On completion, refresh the incident to get real stats and annotations.
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Poll immediately, tolerate transient network errors, and keep retrying the
+  // final data refresh until both marking endpoints have returned successfully.
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const isActive = ACTIVE_ANALYSIS_STATUSES.has(incident.status);
+    if (!ACTIVE_ANALYSIS_STATUSES.has(incident.status)) return;
 
-    const stopPolling = () => {
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-    };
+    let cancelled = false;
+    let pollInFlight = false;
 
-    if (!isActive) {
-      stopPolling();
-      return;
-    }
-
-    // Start polling
-    if (pollTimerRef.current) return; // already polling
-
-    pollTimerRef.current = setInterval(async () => {
+    const poll = async () => {
+      if (cancelled || pollInFlight) return;
+      pollInFlight = true;
       try {
         const jobStatus = await api.getJobStatus(incident.id);
         if (jobStatus.completed || !ACTIVE_ANALYSIS_STATUSES.has(jobStatus.status)) {
-          // Analysis finished — refresh to get real stats + annotations
-          stopPolling();
-          await refreshIncident(incident.id);
+          // Keep polling if either markings request failed transiently.
+          const refreshed = await refreshIncident(incident.id);
+          if (refreshed) return;
         }
-      } catch {
-        // Backend offline — stop polling to avoid repeated errors
-        stopPolling();
+      } catch (error) {
+        console.warn('[AeroMesh API] Analysis status check failed; retrying:', error);
+      } finally {
+        pollInFlight = false;
       }
-    }, 3000);
+      if (!cancelled) {
+        pollTimerRef.current = setTimeout(poll, 3000);
+      }
+    };
 
-    return stopPolling;
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
   }, [incident.id, incident.status, refreshIncident]);
 
   // Clean up polling on unmount
   useEffect(() => {
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   }, []);
 

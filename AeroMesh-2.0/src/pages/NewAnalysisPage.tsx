@@ -22,6 +22,7 @@ export const NewAnalysisPage: React.FC = () => {
   const [localVideoMeta, setLocalVideoMeta] = useState<{ name: string; size: string } | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
@@ -72,6 +73,7 @@ export const NewAnalysisPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    setSubmissionError(null);
     try {
       // 1. Create incident on real backend — backend generates collision-safe ID and immutable UTC timestamp
       const created = await api.createIncident({
@@ -91,18 +93,10 @@ export const NewAnalysisPage: React.FC = () => {
       setIncident({ ...created, status: analysisStatus });
       navigate('/dashboard');
     } catch (err) {
-      console.warn('[AeroMesh API] Starting with local workflow:', err);
-      // Fallback
-      setIncident(prev => ({
-        ...prev,
-        name: title,
-        location,
-        description,
-        status: 'In Progress',
-        videoName: localVideoMeta?.name,
-        videoSize: localVideoMeta?.size,
-      }));
-      navigate('/dashboard');
+      console.error('[AeroMesh API] Failed to start analysis:', err);
+      setSubmissionError(
+        err instanceof Error ? err.message : 'Could not start the analysis. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -379,6 +373,12 @@ export const NewAnalysisPage: React.FC = () => {
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                          {submissionError && (
+                            <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                              <span>{submissionError}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
