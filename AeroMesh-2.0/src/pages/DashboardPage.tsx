@@ -6,7 +6,7 @@ import { DashboardFilters } from '../components/DashboardFilters';
 import { CustomMarkingPanel } from '../components/CustomMarkingPanel';
 import { DashboardStats } from '../components/DashboardStats';
 import { VideoFramesTab } from '../components/VideoFramesTab';
-import { api } from '../services/api';
+import { api, type JobStatus } from '../services/api';
 import type { PendingMarkingData, MarkingType } from '../types';
 
 type DashboardTab = '3d' | 'frames';
@@ -20,6 +20,7 @@ const ACTIVE_ANALYSIS_STATUSES = new Set([
 
 export const DashboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DashboardTab>('3d');
+  const [analysisProgress, setAnalysisProgress] = useState<JobStatus | null>(null);
   const {
     incident,
     markings,
@@ -55,10 +56,19 @@ export const DashboardPage: React.FC = () => {
       pollInFlight = true;
       try {
         const jobStatus = await api.getJobStatus(incident.id);
-        if (jobStatus.completed || !ACTIVE_ANALYSIS_STATUSES.has(jobStatus.status)) {
-          // Keep polling if either markings request failed transiently.
+        setAnalysisProgress(jobStatus);
+        if (
+          jobStatus.completed ||
+          !ACTIVE_ANALYSIS_STATUSES.has(jobStatus.status) ||
+          jobStatus.progress_pct >= 50
+        ) {
+          // Refresh detections after tracking starts and markings after mapping
+          // starts; keep polling until a terminal status is fully refreshed.
           const refreshed = await refreshIncident(incident.id);
-          if (refreshed) return;
+          if (
+            (jobStatus.completed || !ACTIVE_ANALYSIS_STATUSES.has(jobStatus.status)) &&
+            refreshed
+          ) return;
         }
       } catch (error) {
         console.warn('[AeroMesh API] Analysis status check failed; retrying:', error);
@@ -181,9 +191,18 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Incident Info */}
-          <div className="text-[11px] text-slate-500 font-mono hidden sm:block">
-            {incident.id} · AeroMesh Engine v2.4
-          </div>
+        <div className="hidden sm:flex flex-col items-end text-[10px] font-mono">
+          <div className="text-slate-500">{incident.id} · AeroMesh Engine v2.4</div>
+          {analysisProgress?.incident_id === incident.id && (
+            <div className={`max-w-[460px] truncate ${
+              analysisProgress.status === 'FAILED' ? 'text-rose-400' : 'text-cyan-300'
+            }`}>
+              {analysisProgress.error_message
+                ? `Analysis failed: ${analysisProgress.error_message}`
+                : `${analysisProgress.current_stage} · ${analysisProgress.progress_pct}%`}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">

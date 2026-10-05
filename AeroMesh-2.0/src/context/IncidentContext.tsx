@@ -176,11 +176,15 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
    * Completely isolates each analysis: markings from one analysis never leak to another.
    * When reopening an existing analysis, its saved custom markings and individual visibility states are restored.
    */
-  const loadMarkingsForIncident = useCallback(async (incidentId: string): Promise<boolean> => {
-    // Immediately clear current markings so previous analysis markings NEVER leak!
-    setMarkings([]);
-    setCustomMarkingsMaster(true);
-    setFilters(prev => ({ ...prev, customMarkings: {} }));
+  const loadMarkingsForIncident = useCallback(async (
+    incidentId: string,
+    clearCurrent = true
+  ): Promise<boolean> => {
+    if (clearCurrent) {
+      setMarkings([]);
+      setCustomMarkingsMaster(true);
+      setFilters(prev => ({ ...prev, customMarkings: {} }));
+    }
 
     let loaded: CustomMarking[] = [];
 
@@ -196,6 +200,8 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
     } catch (error) {
       console.warn('[AeroMesh API] Failed to load incident markings:', error);
     }
+
+    if (!backendLoaded && !clearCurrent) return false;
 
     // 2. Check per-incident localStorage cache if backend returned none
     if (loaded.length === 0) {
@@ -257,11 +263,16 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
    * They appear as default marking overlays controlled by the platform layer toggles.
    * Clears previous analysis markings so they never leak between incidents.
    */
-  const loadPlatformMarkingsForIncident = useCallback(async (incidentId: string): Promise<boolean> => {
-    if (incidentId === initialIncident.id) {
-      setPlatformMarkings(DEFAULT_PLATFORM_MARKINGS);
-    } else {
-      setPlatformMarkings([]);
+  const loadPlatformMarkingsForIncident = useCallback(async (
+    incidentId: string,
+    clearCurrent = true
+  ): Promise<boolean> => {
+    if (clearCurrent) {
+      if (incidentId === initialIncident.id) {
+        setPlatformMarkings(DEFAULT_PLATFORM_MARKINGS);
+      } else {
+        setPlatformMarkings([]);
+      }
     }
 
     try {
@@ -311,6 +322,7 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
       return true;
     } catch (error) {
       console.warn('[AeroMesh API] Failed to load incident annotations:', error);
+      if (!clearCurrent) return false;
       if (activeIncidentIdRef.current === incidentId) {
         if (incidentId === initialIncident.id) {
           setPlatformMarkings(DEFAULT_PLATFORM_MARKINGS);
@@ -370,8 +382,8 @@ export const IncidentProvider: React.FC<IncidentProviderProps> = ({ children, us
         // 3D model immediately after analysis completes without requiring a
         // full page reload.
         const [markingsLoaded, annotationsLoaded] = await Promise.all([
-          loadMarkingsForIncident(id),
-          loadPlatformMarkingsForIncident(id),
+          loadMarkingsForIncident(id, false),
+          loadPlatformMarkingsForIncident(id, false),
         ]);
         if (!markingsLoaded || !annotationsLoaded) return null;
 
