@@ -79,14 +79,16 @@ export const NewAnalysisPage: React.FC = () => {
         location,
         description,
       });
+      let analysisStatus = created.status;
 
       // 2. Upload video file to backend if selected
       if (videoFile) {
         await api.uploadVideo(created.id, videoFile);
         await api.startAnalysis(created.id);
+        analysisStatus = 'In Progress';
       }
 
-      setIncident(created);
+      setIncident({ ...created, status: analysisStatus });
       navigate('/dashboard');
     } catch (err) {
       console.warn('[AeroMesh API] Starting with local workflow:', err);
